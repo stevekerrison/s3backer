@@ -406,16 +406,26 @@ trampoline_to_nbd(int argc, char **argv)
         exit_pid = wait_for_child_to_exit(config, &exit_proc, !config->foreground, 0);
 
         // If we get a signal, or no more child processes left (foreground mode only), then we're done
-        if (exit_pid == (pid_t)0 || exit_pid == (pid_t)-1)
+        if (exit_pid == (pid_t)0 || exit_pid == (pid_t)-1) {
+            daemon_debug(config, "Normal exit conditions detected");
             break;
+        }
 
         // We are expecting nbd-client to exit immediately
-        if (exit_pid == client_pid)
+        if (exit_pid == client_pid) {
+            // But if it was a non-zero exit, report it
+            if (!WIFEXITED(exit_proc.wstatus) || WEXITSTATUS(exit_proc.wstatus) != 0) {
+                daemon_warnx(config, "NBD client failed to setup %s",
+                  device_param);
+            }
             client_pid = (pid_t)-2;                                                                     // don't match pid again
+        }
 
         // If process exited abnormally, bail out
-        if (!WIFEXITED(exit_proc.wstatus) || WEXITSTATUS(exit_proc.wstatus) != 0)
+        if (!WIFEXITED(exit_proc.wstatus) || WEXITSTATUS(exit_proc.wstatus) != 0) {
+            daemon_warnx(config, "Abnormal exit conditions detected");
             break;
+        }
     }
 
     // Logging
