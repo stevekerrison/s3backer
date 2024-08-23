@@ -350,17 +350,6 @@ trampoline_to_nbd(int argc, char **argv)
             exit(1);
     }
 
-    // If we're not running in the foreground, spit out a message and daemonize
-    if (!config->foreground) {
-        warnx("connecting %s to %s and daemonizing", bucket_param, device_param);
-        if (daemon(0, 0) == -1)
-            err(1, "daemon");
-        set_config_log(config, syslog_logger);
-        daemonized = 1;
-        if (config->debug)
-            daemon_debug(config, "successfully daemonized as process %d", (int)getpid());
-    }
-
     // Wait for socket file to come into existence
     file_created = 0;
     for (elapsed_millis = 0; elapsed_millis <= MAX_NBDKIT_STARTUP_WAIT_MILLIS; elapsed_millis += NBDKIT_STARTUP_WAIT_PAUSE) {
@@ -389,6 +378,7 @@ trampoline_to_nbd(int argc, char **argv)
         daemon_err(config, 1, "add_string");
 
     // Fire up nbd-client
+    warnx("connecting %s to %s", bucket_param, device_param);
     client_pid = start_child_process(config, NBD_CLIENT_EXECUTABLE, &command_line);
     free_strings(&command_line);
 
@@ -418,8 +408,19 @@ trampoline_to_nbd(int argc, char **argv)
         // We are expecting nbd-client to exit immediately; but if it had an error, skip the corresponding cleanup
         if (exit_pid == client_pid) {
             client_pid = (pid_t)-2;                                                                     // don't match pid again
-            if (abnormal_exit)
+            if (abnormal_exit) {
                 skip_client_cleanup = 1;
+                warnx("client failed to connect to %s", device_param);
+            } else if (!config->foreground) {
+                // If we're not running in the foreground, spit out a message and daemonize
+                warnx("daemonizing");
+                if (daemon(0, 0) == -1)
+                    err(1, "daemon");
+                set_config_log(config, syslog_logger);
+                daemonized = 1;
+                if (config->debug)
+                    daemon_debug(config, "successfully daemonized as process %d", (int)getpid());
+            }
         }
 
         // If process exited abnormally, bail out
