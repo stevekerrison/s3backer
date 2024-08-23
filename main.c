@@ -392,9 +392,8 @@ trampoline_to_nbd(int argc, char **argv)
 
     // Wait for the first child process to exit or a signal to be recieved, but ignore exit of nbd-client
     skip_client_cleanup = 0;
+    int abnormal_exit = 0;
     while (1) {
-        int abnormal_exit;
-
         // Wait for next child to exit or signal
         exit_pid = wait_for_child_to_exit(config, &exit_proc, !config->foreground, 0);
 
@@ -454,7 +453,7 @@ trampoline_to_nbd(int argc, char **argv)
     (void)unlink(unix_socket);
 
     // Done
-    return 0;
+    return abnormal_exit;
 }
 
 // Somebody killed us, so we need to kill our child processes as well.
